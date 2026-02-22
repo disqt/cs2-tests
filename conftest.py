@@ -3,7 +3,43 @@ import time
 import pytest
 
 from config import get_config
-from rcon_client import RconClient
+from rcon_client import RconClient, RconError
+
+
+def wait_for_reconnect(rcon, timeout: float = 20.0) -> None:
+    """Wait for server to accept RCON connections after a map/mode change.
+
+    Map changes drop the TCP connection. This polls until the server
+    is back up and we can reconnect + send a command.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            rcon.reconnect()
+            # CS2 may return empty on the first command after reconnect.
+            # Retry a couple of times before considering the server ready.
+            for _ in range(3):
+                resp = rcon.command("status")
+                if resp:
+                    return
+                time.sleep(0.5)
+        except (TimeoutError, RconError, OSError):
+            pass
+        time.sleep(2)
+    raise RconError(f"Server did not come back within {timeout}s")
+
+
+def reset_server(rcon):
+    """Full server reset: modifiers, mode, bots.
+
+    Resets DisqtModes modifier state (internal booleans + cvars),
+    switches to casual (applies mode config), then kicks bots.
+    """
+    rcon.command("css_reset")
+    rcon.command("exec casual.cfg")
+    wait_for_reconnect(rcon)
+    rcon.command("bot_kick")
+    rcon.command("sv_cheats false")
 
 
 @pytest.fixture(scope="session")
@@ -13,30 +49,35 @@ def rcon():
     client = RconClient(cfg.host, cfg.port, cfg.password)
     client.connect()
     yield client
+    # Session teardown: leave server in clean state
+    try:
+        reset_server(client)
+    except (TimeoutError, RconError, OSError):
+        pass
     client.close()
 
 
 @pytest.fixture()
 def clean_server(rcon):
-    """Reset server state after each destructive test.
-
-    Kicks bots, switches to casual, changes map to de_dust2.
-    Used as explicit fixture on tests that mutate state.
-    """
+    """Reset server state after each destructive test."""
     yield
-    rcon.command("bot_kick")
-    rcon.command("css_changemode casual")
-    time.sleep(2)
+    reset_server(rcon)
 
 
-def wait_for_map(rcon, expected_map: str, timeout: float = 15.0) -> bool:
-    """Poll status until map matches or timeout."""
+def wait_for_map(rcon, expected_map: str, timeout: float = 30.0) -> bool:
+    """Wait for server to load expected map (reconnects if needed)."""
+    # Map change drops connection -- wait for server to come back first
+    time.sleep(3)
     deadline = time.time() + timeout
     while time.time() < deadline:
-        response = rcon.command("status")
-        for line in response.splitlines():
-            if line.strip().startswith("map"):
-                if expected_map in line:
-                    return True
-        time.sleep(1)
+        try:
+            response = rcon.command("status")
+            if expected_map in response.lower():
+                return True
+        except (TimeoutError, RconError, OSError):
+            try:
+                rcon.reconnect()
+            except (TimeoutError, RconError, OSError):
+                pass
+        time.sleep(2)
     return False

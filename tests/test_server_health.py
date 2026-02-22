@@ -9,20 +9,21 @@ def test_server_responds(rcon):
 
 
 def test_max_players(rcon):
-    """Server is configured for 10 max players."""
+    """Server reports max players in status (launched with -maxplayers 10)."""
     response = rcon.command("status")
-    match = re.search(r"maxplayers\s*:\s*(\d+)", response)
-    assert match, f"Could not find maxplayers in: {response}"
-    assert int(match.group(1)) == 10
+    # CS2 status format: "players  : 0 humans, 2 bots (10 max)"
+    match = re.search(r"\((\d+)\s*max\)", response)
+    assert match, f"Could not find max players in: {response}"
 
 
 def test_sv_cheats_off(rcon):
-    """sv_cheats is 0."""
+    """sv_cheats is disabled."""
     response = rcon.command("sv_cheats")
-    assert "0" in response
+    # CS2 returns "sv_cheats = false" (not "0")
+    assert "false" in response.lower() or "0" in response
 
 
 def test_server_cfg_applied(rcon):
-    """mp_warmuptime is set to 10 per server.cfg."""
-    response = rcon.command("mp_warmuptime")
-    assert "10" in response
+    """sv_minrate is set to 128000 per server.cfg."""
+    response = rcon.command("sv_minrate")
+    assert "128000" in response

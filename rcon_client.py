@@ -63,22 +63,30 @@ class RconClient:
         self._sock.connect((self.host, self.port))
         auth_id = self._next_id()
         self._send_packet(auth_id, self.SERVERDATA_AUTH, self.password)
-        for _ in range(2):
+        # Read until AUTH_RESPONSE; some servers send an empty
+        # RESPONSE_VALUE first, others skip straight to AUTH_RESPONSE.
+        while True:
             pkt_id, pkt_type, _ = self._recv_packet()
             if pkt_type == 2:  # AUTH_RESPONSE
                 if pkt_id == -1:
                     raise RconAuthError("Authentication failed")
                 return
-        raise RconError("Unexpected auth response")
 
     def close(self) -> None:
         if self._sock:
             self._sock.close()
             self._sock = None
 
-    def command(self, cmd: str) -> str:
-        if not self._sock:
-            raise RconError("Not connected")
+    def reconnect(self) -> None:
+        """Close and re-establish connection. Used after map/mode changes."""
+        self.close()
+        self.connect()
+
+    # Responses above this size may be fragmented across multiple packets.
+    # A sentinel is sent to detect the end of a multi-packet response.
+    FRAG_THRESHOLD = 4096
+
+    def _command_once(self, cmd: str) -> str:
         cmd_id = self._next_id()
         self._send_packet(cmd_id, self.SERVERDATA_EXECCOMMAND, cmd)
         end_id = self._next_id()
@@ -88,8 +96,48 @@ class RconClient:
             pkt_id, _, body = self._recv_packet()
             if pkt_id == end_id:
                 break
-            response.append(body)
+            if body:
+                response.append(body)
+        # CS2 may still be flushing packets for this command after the
+        # sentinel reply arrives (empty ack / late data). Drain them
+        # with a short non-blocking read so they don't pollute the
+        # next command's response.
+        self._drain()
         return "".join(response)
+
+    def _drain(self) -> None:
+        """Drain any late packets CS2 sends after the sentinel reply.
+
+        CS2's RCON can send an empty ack + real data for a command, with
+        the sentinel echo arriving between them.  Without draining, the
+        late data packet pollutes the next command's response.
+        """
+        self._sock.settimeout(0.05)
+        try:
+            while True:
+                self._sock.recv(4096)
+        except (socket.timeout, BlockingIOError):
+            pass
+        finally:
+            self._sock.settimeout(self.timeout)
+
+    def command(self, cmd: str, retries: int = 1) -> str:
+        """Send command with auto-reconnect on connection failure."""
+        if not self._sock:
+            raise RconError("Not connected")
+        for attempt in range(1 + retries):
+            try:
+                return self._command_once(cmd)
+            except (TimeoutError, RconError, OSError):
+                if attempt < retries:
+                    import time
+                    time.sleep(2)
+                    try:
+                        self.reconnect()
+                    except (TimeoutError, RconError, OSError):
+                        pass
+                else:
+                    raise
 
     def __enter__(self):
         self.connect()

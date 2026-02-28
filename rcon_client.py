@@ -121,13 +121,27 @@ class RconClient:
         finally:
             self._sock.settimeout(self.timeout)
 
-    def command(self, cmd: str, retries: int = 1) -> str:
-        """Send command with auto-reconnect on connection failure."""
+    def command(self, cmd: str, retries: int = 2) -> str:
+        """Send command with retry on empty response or connection failure.
+
+        CS2 RCON can return empty due to a race condition (sentinel reply
+        arrives before the real data). Retrying with a fresh connection
+        resolves it.
+        """
         if not self._sock:
             raise RconError("Not connected")
         for attempt in range(1 + retries):
             try:
-                return self._command_once(cmd)
+                result = self._command_once(cmd)
+                if result:
+                    return result
+                # Empty response -- likely CS2 race condition. Retry.
+                if attempt < retries:
+                    import time
+                    time.sleep(0.1)
+                    self.reconnect()
+                    continue
+                return result
             except (TimeoutError, RconError, OSError):
                 if attempt < retries:
                     import time

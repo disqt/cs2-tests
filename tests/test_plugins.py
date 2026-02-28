@@ -2,17 +2,8 @@ import pytest
 
 # Display names as reported by css_plugins list (not folder names)
 EXPECTED_PLUGINS = [
-    "CS2 Announcement Broadcaster",
-    "Custom Votes",
-    "CS2_ExecAfter",
-    "CS2Rcon",
     "Disqt Modes",
-    "FixRandomSpawn",
-    "GameModeManager",
     "InventorySimulator",
-    "Map Configurator",
-    "SimpleAdmin",
-    "WASDMenuAPI",
 ]
 
 

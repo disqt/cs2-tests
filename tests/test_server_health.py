@@ -16,11 +16,10 @@ def test_max_players(rcon):
     assert match, f"Could not find max players in: {response}"
 
 
-def test_sv_cheats_off(rcon):
-    """sv_cheats is disabled."""
+def test_sv_cheats_on(rcon):
+    """sv_cheats is enabled (server boots in practice mode)."""
     response = rcon.command("sv_cheats")
-    # CS2 returns "sv_cheats = false" (not "0")
-    assert "false" in response.lower() or "0" in response
+    assert "true" in response.lower() or "1" in response
 
 
 def test_server_cfg_applied(rcon):

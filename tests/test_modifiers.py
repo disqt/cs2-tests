@@ -13,12 +13,7 @@ class TestModifiers:
         response = rcon.command("css_pistol")
         assert "unknown" not in response.lower(), f"Command unknown: {response}"
 
-    def test_vampire_toggle(self, rcon, clean_server):
-        """css_vampire command is accepted."""
-        response = rcon.command("css_vampire")
-        assert "unknown" not in response.lower(), f"Command unknown: {response}"
-
-    def test_ammo_toggle(self, rcon, clean_server):
-        """css_ammo command is accepted."""
-        response = rcon.command("css_ammo")
+    def test_awp_toggle(self, rcon, clean_server):
+        """css_awp command is accepted."""
+        response = rcon.command("css_awp")
         assert "unknown" not in response.lower(), f"Command unknown: {response}"

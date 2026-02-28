@@ -33,13 +33,12 @@ def reset_server(rcon):
     """Full server reset: modifiers, mode, bots.
 
     Resets DisqtModes modifier state (internal booleans + cvars),
-    switches to casual (applies mode config), then kicks bots.
+    switches back to practice (default mode), then kicks bots.
     """
     rcon.command("css_reset")
-    rcon.command("exec casual.cfg")
+    rcon.command("exec practice.cfg")
     wait_for_reconnect(rcon)
     rcon.command("bot_kick")
-    rcon.command("sv_cheats false")
 
 
 @pytest.fixture(scope="session")

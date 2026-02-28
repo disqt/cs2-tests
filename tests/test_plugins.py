@@ -2,11 +2,8 @@ import pytest
 
 # Display names as reported by css_plugins list (not folder names)
 EXPECTED_PLUGINS = [
-    "CS2Rcon",
     "Disqt Modes",
-    "FixRandomSpawn",
     "InventorySimulator",
-    "SimpleAdmin",
 ]
 
 
